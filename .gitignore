@@ -1,3 +1,5 @@
 .env
 .idea/
 poetry.lock
+backpack_tf2/__pycache__/
+backpack_tf2/app/__pycache__/
