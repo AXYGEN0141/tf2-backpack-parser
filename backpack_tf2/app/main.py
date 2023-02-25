@@ -1,4 +1,6 @@
-from backpack_tf2.app.classifieds import Account
+from backpack_tf2.app.bp_acc import Account
+from backpack_tf2.app.bp_api import Backpack
+import time
 
 from backpack_tf2.app.config import (
     BACKPACK_API_KEY,
@@ -7,13 +9,13 @@ from backpack_tf2.app.config import (
 )
 
 acc = Account(client_id=CLIENT_ID, client_secret=CLIENT_SECRET, api_key=BACKPACK_API_KEY)
+bp = Backpack(acc=acc, result={"listings": None})
 
 
 def main():
-    first = acc.get_class_unusual_classifieds(page_size=30, class_="scout,soldier,pyro")
-    second = acc.get_class_unusual_classifieds(page_size=30, class_="demoman,heavy,engineer")
-    third = acc.get_class_unusual_classifieds(page_size=30, class_="medic,sniper,spy")
-    print(first+second+third)
+    start_time = time.time()
+    bp.get_unusual_classifieds_by_effect(page_size=30, particle=13)
+    print("--- %s seconds ---" % (time.time() - start_time))
 
 
 if __name__ == "__main__":
