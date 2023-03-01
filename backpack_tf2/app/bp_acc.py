@@ -4,6 +4,7 @@ from oauthlib.oauth2 import BackendApplicationClient
 
 class Account:
     """Account class is responsible for initiating OAuth2 connection."""
+
     def __init__(self, client_id, client_secret, api_key):
         self.api_key = api_key
         self.client_id = client_id

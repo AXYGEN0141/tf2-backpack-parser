@@ -4,10 +4,12 @@ import pymongo
 
 
 class ListingsRepository:
-    collection_hats = "unusualHats"
+    collection_unusual_hats = "unusualHats"
 
     def __init__(self):
-        self.collection_hats: pymongo.collection.Collection = db[self.collection_hats]
+        self.collection_unusual_hats: pymongo.collection.Collection = db[
+            self.collection_unusual_hats
+        ]
 
     def get_by_filter(self, getfilter: dict) -> ListingObject | None:
         """
@@ -15,7 +17,7 @@ class ListingsRepository:
         If ListingObject record exists -> return ListingObject instance.
         If ListingObject record doesn't exist -> return None.
         """
-        data = self.collection_hats.find_one(getfilter)
+        data = self.collection_unusual_hats.find_one(getfilter)
         if data is not None:
             return ListingObject(**data)
         return None
@@ -26,5 +28,5 @@ class ListingsRepository:
         Add record to db.
         """
         instance_to_dict = instance.dict()
-        self.collection_hats.insert_one(instance_to_dict)
+        self.collection_unusual_hats.insert_one(instance_to_dict)
         return instance
