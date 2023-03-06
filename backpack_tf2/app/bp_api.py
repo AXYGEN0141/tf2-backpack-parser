@@ -1,9 +1,10 @@
 from backpack_tf2.app.bp_acc import Account
 from backpack_tf2.app.entities import ListingObject
-from backpack_tf2.app.helpers import del_multiple_keys, pop_multiple_keys
+from backpack_tf2.app.helpers import del_multiple_keys, pop_multiple_keys, currency_parser
 from backpack_tf2.app.listings_repo import ListingsRepository
 from backpack_tf2.app import misc
 from typing import Optional
+from discord_webhook import DiscordWebhook, DiscordEmbed
 import urllib.parse
 import json
 import requests
@@ -13,6 +14,9 @@ import time
 
 class Backpack:
     """Backpack class is responsible for interaction with Backpack.tf API."""
+    collection_unusual_hats = ListingsRepository("unusualHats")
+    collection_collector_weps = ListingsRepository("collectorWeps")
+    collection_unusual_weps = ListingsRepository("unusualWeps")
 
     def __init__(self, acc: Account):
         self.acc = acc
@@ -66,6 +70,8 @@ class Backpack:
 
     def get_all_classifieds(
         self,
+        collection_: ListingsRepository,
+        discord_webhook: Optional[DiscordWebhook] = None,
         page_size: Optional[int] = 10,
         quality: Optional[int] = 5,
         particle: Optional[str] = "13",
@@ -73,7 +79,7 @@ class Backpack:
         class_: Optional[str] = "",
         item: Optional[str] = "",
     ):
-        unusual_repo = ListingsRepository()
+        embed_counter = 0
         page_to_parse = 1
         classifieds = self.search_classifieds(
             page=page_to_parse,
@@ -97,44 +103,55 @@ class Backpack:
             )
             for listing in classifieds["sell"]["listings"]:
                 pop_multiple_keys(listing, ["automatic", "promoted"])
-                del_multiple_keys(
-                    listing, ["appid", "offers", "buyout", "created", "bump", "intent"]
-                )
+                del_multiple_keys(listing, ["appid", "offers", "buyout", "created", "bump", "intent"])
                 listing_id = listing.pop("id", None)
-                md5_hash = hashlib.md5(
-                    json.dumps(listing, sort_keys=True).encode("utf-8")
-                ).hexdigest()
-                listing_instance = ListingObject(
-                    listing_id=listing_id, data_md5=md5_hash, data=listing
-                )
-
-                db_record = unusual_repo.get_by_filter(
-                    {"data_md5": listing_instance.data_md5}
-                )
+                md5_hash = hashlib.md5(json.dumps(listing, sort_keys=True).encode("utf-8")).hexdigest()
+                listing_instance = ListingObject(listing_id=listing_id, data_md5=md5_hash, data=listing)
+                db_record = collection_.get_by_filter({"data_md5": listing_instance.data_md5})
                 if db_record is not None:
                     pass
                 else:
-                    unusual_repo.create(listing_instance)
+                    collection_.create(listing_instance)
+                    if discord_webhook:
+                        if embed_counter == 8:
+                            discord_webhook.execute(remove_embeds=True)
+                            embed_counter = 0
+                        else:
+                            item_name = listing_instance.data["item"]["name"]
+                            description = listing_instance.data["details"]
+                            profile_link = "https://steamcommunity.com/profiles/" + str(listing_instance.data["steamid"])
+                            currency = currency_parser(listing_instance.data["currencies"])
+                            embed = DiscordEmbed(title=f"**{item_name}**", color=242424)
+                            embed.set_author(name="Seller's Steam profile", url=profile_link, icon_url="https://media.istockphoto.com/id/163011987/photo/dollar-bill-bundles-pile.jpg?s=612x612&w=0&k=20&c=VlIOlrsfqb7WWAPsmOID4ILguRX9bS4MqNsg_S7WhRE=")
+                            embed.add_embed_field(name="Price", value=f"{currency}")
+                            if description == "":
+                                pass
+                            else:
+                                embed.add_embed_field(name="Description", value=description)
+                            embed.set_timestamp()
+                            discord_webhook.add_embed(embed)
+                            embed_counter += 1
                 repeat -= 1
+
+            if discord_webhook and embed_counter != 0:
+                discord_webhook.execute(remove_embeds=True)
+                embed_counter = 0
             page_to_parse += 1
 
-    def get_unusual_classifieds_by_effect(
-        self, page_size: Optional[int] = 10, particle: str = "13"
-    ):
-        self.get_all_classifieds(
-            page_size=page_size, class_="scout,soldier,pyro", particle=particle
-        )
-        self.get_all_classifieds(
-            page_size=page_size, class_="demoman,heavy,engineer", particle=particle
-        )
-        self.get_all_classifieds(
-            page_size=page_size, class_="medic,sniper,spy", particle=particle
-        )
+    def get_unusual_classifieds_by_effect(self, discord_webhook: Optional[DiscordWebhook] = None,
+                                          page_size: Optional[int] = 10, particle: str = "13"):
+        self.get_all_classifieds(discord_webhook=discord_webhook, collection_=self.collection_unusual_hats,
+                                 page_size=page_size, class_="scout,soldier,pyro", particle=particle, slot="misc")
+        self.get_all_classifieds(discord_webhook=discord_webhook, collection_=self.collection_unusual_hats,
+                                 page_size=page_size, class_="demoman,heavy,engineer", particle=particle, slot="misc")
+        self.get_all_classifieds(discord_webhook=discord_webhook, collection_=self.collection_unusual_hats,
+                                 page_size=page_size, class_="medic,sniper,spy", particle=particle, slot="misc")
         for item in misc.all_class_hats:
-            self.get_all_classifieds(page_size=30, item=item, particle=particle)
-            time.sleep(1)
+            self.get_all_classifieds(discord_webhook=discord_webhook, collection_=self.collection_unusual_hats,
+                                     page_size=30, item=item, particle=particle)
+            time.sleep(1.3)
 
-    def get_collectors_classifieds(self, page_size: Optional[int] = 10):
-        self.get_all_classifieds(
-            page_size=page_size, quality=14, particle="", slot="primary,secondary,melee"
-        )
+    def get_collectors_classifieds(self, discord_webhook: Optional[DiscordWebhook] = None,
+                                   page_size: Optional[int] = 10):
+        self.get_all_classifieds(discord_webhook=discord_webhook, collection_=self.collection_collector_weps,
+                                 page_size=page_size, quality=14, particle="", slot="primary,secondary,melee")
